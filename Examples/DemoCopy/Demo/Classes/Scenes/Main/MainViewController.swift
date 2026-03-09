@@ -139,6 +139,14 @@ class MainViewController: UIViewController, Storyboarded {
         self.viewModel?.$elaraCoachCardModel.sink { [weak self] model in
             self?.updateElaraCoachDrawer(with: model)
         }.store(in: &cancellables)
+        self.viewModel?.$elaraAnalyzeInFlight.removeDuplicates().sink { [weak self] isAnalyzing in
+            guard let self = self else { return }
+            if isAnalyzing {
+                self.elaraCoachDrawerView.isHidden = false
+                self.setElaraCoachDrawerExpanded(true, animated: true)
+            }
+            self.elaraCoachDrawerView.setLoading(isAnalyzing)
+        }.store(in: &cancellables)
         self.viewModel?.$elaraAnchoredHighlights.sink { [weak self] highlights in
             self?.elaraHighlightsOverlayView.anchoredHighlights = highlights
         }.store(in: &cancellables)
@@ -432,9 +440,13 @@ private final class ElaraCoachDrawerView: UIView {
     private let actionLabel = UILabel()
     private let practiceButton = UIButton(type: .system)
     private let primaryButton = UIButton(type: .system)
+    private let loadingRow = UIStackView()
+    private let loadingIndicator = UIActivityIndicatorView(style: .medium)
+    private let loadingLabel = UILabel()
     private let contentStack = UIStackView()
     private let footerStack = UIStackView()
     private var isExpanded: Bool = false
+    private var isLoading: Bool = false
     private(set) var preferredCollapsedHeight: CGFloat = 88
     private var practiceButtonAction: PracticeButtonAction = .none
 
@@ -530,6 +542,20 @@ private final class ElaraCoachDrawerView: UIView {
         self.isExpanded = expanded
         self.handleButton.setTitle(expanded ? "‹" : "›", for: .normal)
         self.cardContainer.isHidden = (expanded == false)
+    }
+
+    func setLoading(_ isLoading: Bool) {
+        self.isLoading = isLoading
+        self.loadingRow.isHidden = (isLoading == false)
+        if isLoading {
+            self.loadingIndicator.startAnimating()
+        } else {
+            self.loadingIndicator.stopAnimating()
+        }
+        self.primaryButton.isEnabled = (isLoading == false)
+        self.practiceButton.isEnabled = (isLoading == false)
+        self.primaryButton.alpha = isLoading ? 0.65 : 1.0
+        self.practiceButton.alpha = isLoading ? 0.65 : 1.0
     }
 
     func showIntroState() {
@@ -668,6 +694,22 @@ private final class ElaraCoachDrawerView: UIView {
         self.actionLabel.numberOfLines = 0
         self.actionLabel.textAlignment = .left
 
+        self.loadingIndicator.hidesWhenStopped = false
+
+        self.loadingLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        self.loadingLabel.textColor = .secondaryLabel
+        self.loadingLabel.numberOfLines = 1
+        self.loadingLabel.textAlignment = .left
+        self.loadingLabel.text = "Analyzing with Elara..."
+
+        self.loadingRow.axis = .horizontal
+        self.loadingRow.alignment = .center
+        self.loadingRow.spacing = 8
+        self.loadingRow.addArrangedSubview(self.loadingIndicator)
+        self.loadingRow.addArrangedSubview(self.loadingLabel)
+        self.loadingRow.addArrangedSubview(UIView())
+        self.loadingRow.isHidden = true
+
         self.primaryButton.setTitle("Analyze with Elara", for: .normal)
         self.primaryButton.backgroundColor = .systemBlue
         self.primaryButton.setTitleColor(.white, for: .normal)
@@ -717,6 +759,7 @@ private final class ElaraCoachDrawerView: UIView {
         self.footerStack.alignment = .fill
         self.footerStack.spacing = 10
         self.footerStack.translatesAutoresizingMaskIntoConstraints = false
+        self.footerStack.addArrangedSubview(self.loadingRow)
         self.footerStack.addArrangedSubview(self.actionLabel)
         self.footerStack.addArrangedSubview(self.practiceButton)
         self.footerStack.addArrangedSubview(self.primaryButton)
@@ -761,10 +804,16 @@ private final class ElaraCoachDrawerView: UIView {
     }
 
     @objc private func didTapPrimary() {
+        guard self.isLoading == false else {
+            return
+        }
         self.onPrimaryAction?()
     }
 
     @objc private func didTapPractice() {
+        guard self.isLoading == false else {
+            return
+        }
         switch self.practiceButtonAction {
         case .insert:
             self.onPracticeAction?()

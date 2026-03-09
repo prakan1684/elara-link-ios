@@ -25,6 +25,7 @@ class MainViewModel: NSObject {
     @Published var elaraCoachCardModel: ElaraCoachCardModel?
     @Published var elaraHighlights: [ElaraHighlight] = []
     @Published var elaraAnchoredHighlights: [ElaraAnchoredHighlight] = []
+    @Published var elaraAnalyzeInFlight: Bool = false
     // Enable/Disable buttons and gestures
     @Published var addPartItemEnabled: Bool = false
     @Published var editingEnabled: Bool = false
@@ -254,13 +255,13 @@ class MainViewModel: NSObject {
             self.handleDefaultError(errorMessage: "Elara could not read the current page")
             return
         }
-        self.isAnalyzing = true
+        self.setAnalyzingState(true)
         self.tutorAPIClient.analyze(request: request) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self = self else {
                     return
                 }
-                self.isAnalyzing = false
+                self.setAnalyzingState(false)
                 switch result {
                 case .success(let response):
                     self.lastElaraSnapshotId = response.snapshotId ?? request.snapshotId
@@ -269,13 +270,23 @@ class MainViewModel: NSObject {
                     self.lastAnalyzedProvisionalSteps = request.recognition.provisionalSteps ?? []
                     self.pendingPracticeProblem = response.practiceProblem
                     self.elaraCoachCardModel = self.makeElaraCoachCardModel(from: response, showRecheckPrompt: false)
-                    self.elaraHighlights = response.highlights ?? []
-                    self.elaraAnchoredHighlights = self.resolveAnchoredHighlights(from: response, request: request)
+                    if Self.shouldShowErrorHighlights(for: response) {
+                        self.elaraHighlights = response.highlights ?? []
+                        self.elaraAnchoredHighlights = self.resolveAnchoredHighlights(from: response, request: request)
+                    } else {
+                        self.elaraHighlights = []
+                        self.elaraAnchoredHighlights = []
+                    }
                 case .failure(let error):
                     self.handleDefaultError(errorMessage: "Elara analysis failed: \(error.localizedDescription)")
                 }
             }
         }
+    }
+
+    private func setAnalyzingState(_ isAnalyzing: Bool) {
+        self.isAnalyzing = isAnalyzing
+        self.elaraAnalyzeInFlight = isAnalyzing
     }
 
     private func buildAnalyzeRequest() -> ElaraAnalyzeRequest? {
@@ -431,9 +442,10 @@ class MainViewModel: NSObject {
         }
         let insertionPoint = self.nextPracticeProblemInsertionPoint()
         let practiceBlockText = self.practiceProblemBlockText(from: practiceProblem)
+        let practiceMathExpression = self.practiceProblemMathExpression(from: practiceBlockText)
         do {
             self.suppressPostAnalyzeChangeHandling = true
-            try self.editorWorker.addTextBlock(position: insertionPoint, data: practiceBlockText)
+            try self.editorWorker.addMathBlock(position: insertionPoint, data: practiceMathExpression)
             print("[Elara Practice] Inserted practice problem block at x=\(insertionPoint.x), y=\(insertionPoint.y)")
             DispatchQueue.main.async { [weak self] in
                 self?.suppressPostAnalyzeChangeHandling = false
@@ -478,19 +490,16 @@ class MainViewModel: NSObject {
     }
 
     private func practiceProblemBlockText(from practiceProblem: ElaraPracticeProblem) -> String {
-        var lines: [String] = []
-        lines.append("Practice Problem")
-        if let topic = practiceProblem.topic, topic.isEmpty == false {
-            lines.append("Topic: \(topic)")
+        return practiceProblem.problemText
+    }
+
+    private func practiceProblemMathExpression(from problemText: String) -> String {
+        let trimmed = problemText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let colonIndex = trimmed.lastIndex(of: ":") else {
+            return trimmed
         }
-        if let difficulty = practiceProblem.difficulty, difficulty.isEmpty == false {
-            lines.append("Difficulty: \(difficulty.capitalized)")
-        }
-        lines.append(practiceProblem.problemText)
-        for (index, hint) in practiceProblem.hints.enumerated() {
-            lines.append("Hint \(index + 1): \(hint)")
-        }
-        return lines.joined(separator: "\n")
+        let candidate = trimmed[trimmed.index(after: colonIndex)...].trimmingCharacters(in: .whitespacesAndNewlines)
+        return candidate.isEmpty ? trimmed : candidate
     }
 
     private static func displayText(forAction action: String?) -> String {
@@ -509,6 +518,13 @@ class MainViewModel: NSObject {
                 .lowercased()
             return normalized.capitalized
         }
+    }
+
+    private static func shouldShowErrorHighlights(for response: ElaraAnalyzeResponse) -> Bool {
+        guard let status = response.status?.uppercased() else {
+            return false
+        }
+        return status == "INVALID"
     }
 
     private func resolveAnchoredHighlights(from response: ElaraAnalyzeResponse,

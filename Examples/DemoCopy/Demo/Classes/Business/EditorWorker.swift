@@ -28,6 +28,7 @@ protocol EditorWorkerLogic {
     func paste(at position: CGPoint) throws
     func set(textFormat: IINKTextFormat, selection: NSObjectProtocol & IINKIContentSelection) throws
     func addTextBlock(position: CGPoint, data: String) throws
+    func addMathBlock(position: CGPoint, data: String) throws
     func addBlock(position: CGPoint, type: String) throws
     func unloadPart()
 
@@ -45,6 +46,7 @@ class EditorWorker: EditorWorkerLogic {
         case partCreationFailed
         case convertFailed
         case addImageFailed
+        case addBlockFailed
         case clearFailed
     }
 
@@ -189,6 +191,35 @@ class EditorWorker: EditorWorkerLogic {
                                  data: data)
         } catch {
             throw error
+        }
+    }
+
+    func addMathBlock(position: CGPoint, data: String) throws {
+        let mathData = data.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard mathData.isEmpty == false else {
+            throw EditorError.addBlockFailed
+        }
+        guard let editor = self.editor else {
+            throw EditorError.addBlockFailed
+        }
+
+        do {
+            try editor.addBlock(position: position,
+                                type: "Math",
+                                mimeType: .laTeX,
+                                data: mathData)
+        } catch {
+            do {
+                try editor.addBlock(position: position,
+                                    type: "Math",
+                                    mimeType: .mathML,
+                                    data: mathData)
+            } catch {
+                try editor.addBlock(position: position,
+                                    type: "Text",
+                                    mimeType: .text,
+                                    data: mathData)
+            }
         }
     }
 

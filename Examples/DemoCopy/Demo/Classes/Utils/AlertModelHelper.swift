@@ -29,10 +29,13 @@ struct AlertModelHelper {
                                                 exitAppWhenClosed: false)
         case .addImageFailed:
             return self.createDefaultErrorAlert(message: "An error occurred while adding the image",
-                                                exitAppWhenClosed: false)
+                                            exitAppWhenClosed: false)
+        case .addBlockFailed:
+            return self.createDefaultErrorAlert(message: "An error occurred while adding the practice problem",
+                                            exitAppWhenClosed: false)
         case .clearFailed:
             return self.createDefaultErrorAlert(message: "An error occurred while clearing the page",
-                                                exitAppWhenClosed: false)
+                                            exitAppWhenClosed: false)
         }
     }
 
