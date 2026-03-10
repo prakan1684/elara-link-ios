@@ -1,16 +1,20 @@
 PODS:
+  - iosMath (0.9.4)
   - MyScriptInteractiveInk-Runtime (4.3.0)
 
 DEPENDENCIES:
+  - iosMath
   - MyScriptInteractiveInk-Runtime (= 4.3.0)
 
 SPEC REPOS:
   trunk:
+    - iosMath
     - MyScriptInteractiveInk-Runtime
 
 SPEC CHECKSUMS:
+  iosMath: f7a6cbadf9d836d2149c2a84c435b1effc244cba
   MyScriptInteractiveInk-Runtime: e97cfef80a83bb340408041f595b889956ce101d
 
-PODFILE CHECKSUM: 69eee95c636c2647cc05b73aa66c34d453d4d1ef
+PODFILE CHECKSUM: ad9e6ca5ea7dcb803f7485e3ff574ca77672fe00
 
 COCOAPODS: 1.16.2

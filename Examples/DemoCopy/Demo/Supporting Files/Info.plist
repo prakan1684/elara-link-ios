@@ -30,6 +30,8 @@
 	<false/>
 	<key>ELARA_LOG_VERBOSE_RECOGNITION</key>
 	<false/>
+	<key>ELARA_LOG_LATEX_RENDER</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIAppFonts</key>

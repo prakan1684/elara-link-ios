@@ -416,6 +416,17 @@ class MainViewModel: NSObject {
             bodyParts.append(hint)
         }
         if bodyParts.isEmpty {
+            if let problemLatex = response.agentGoal?.problemLatex, problemLatex.isEmpty == false {
+                bodyParts.append("Problem: $\(problemLatex)$")
+            }
+            if let studentWorkLatex = response.agentGoal?.studentWorkLatex, studentWorkLatex.isEmpty == false {
+                bodyParts.append("Your work: $\(studentWorkLatex)$")
+            }
+            if let correctAnswerLatex = response.agentGoal?.correctAnswerLatex, correctAnswerLatex.isEmpty == false {
+                bodyParts.append("Correct answer: $\(correctAnswerLatex)$")
+            }
+        }
+        if bodyParts.isEmpty {
             bodyParts.append(response.summary)
         }
 
@@ -512,6 +523,8 @@ class MainViewModel: NSObject {
             return "Revise & Check"
         case "CHECK_AGAIN":
             return "Check Again"
+        case "NEW_PRACTICE":
+            return "Try New Practice Problem"
         default:
             let normalized = action
                 .replacingOccurrences(of: "_", with: " ")
@@ -1200,6 +1213,10 @@ struct ElaraAgentGoal: Codable {
     let toolsUsed: [String]?
     let focusStepId: String?
     let focusLineIndex: Int?
+    let problemLatex: String?
+    let studentWorkLatex: String?
+    let correctAnswerLatex: String?
+    let errorLocationLatex: String?
 
     enum CodingKeys: String, CodingKey {
         case intent
@@ -1210,6 +1227,10 @@ struct ElaraAgentGoal: Codable {
         case toolsUsed = "tools_used"
         case focusStepId = "focus_step_id"
         case focusLineIndex = "focus_line_index"
+        case problemLatex = "problem_latex"
+        case studentWorkLatex = "student_work_latex"
+        case correctAnswerLatex = "correct_answer_latex"
+        case errorLocationLatex = "error_location_latex"
     }
 }
 
@@ -1490,7 +1511,11 @@ class TutorAPIClient: TutorAPIClientLogic {
                                   toolsPlanned: Self.stringArray(in: goalObject, keys: ["tools_planned", "toolsPlanned"]),
                                   toolsUsed: Self.stringArray(in: goalObject, keys: ["tools_used", "toolsUsed"]),
                                   focusStepId: Self.firstString(in: goalObject, keys: ["focus_step_id", "focusStepId"]),
-                                  focusLineIndex: Self.firstInt(in: goalObject, keys: ["focus_line_index", "focusLineIndex"]))
+                                  focusLineIndex: Self.firstInt(in: goalObject, keys: ["focus_line_index", "focusLineIndex"]),
+                                  problemLatex: Self.firstString(in: goalObject, keys: ["problem_latex", "problemLatex"]),
+                                  studentWorkLatex: Self.firstString(in: goalObject, keys: ["student_work_latex", "studentWorkLatex"]),
+                                  correctAnswerLatex: Self.firstString(in: goalObject, keys: ["correct_answer_latex", "correctAnswerLatex"]),
+                                  errorLocationLatex: Self.firstString(in: goalObject, keys: ["error_location_latex", "errorLocationLatex"]))
         }
         for key in ["result", "data", "response", "checkResponse"] {
             if let nested = json[key] as? [String: Any],

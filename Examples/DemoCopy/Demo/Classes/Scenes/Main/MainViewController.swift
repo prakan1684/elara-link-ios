@@ -3,6 +3,7 @@
 import Foundation
 import Combine
 import UIKit
+import WebKit
 
 /// Protocol called by the MainViewModel, in order to communicate with the Coordinator
 
@@ -429,14 +430,14 @@ private final class ElaraCoachDrawerView: UIView {
     private let statusChipLabel = UILabel()
     private let confidenceLabel = UILabel()
     private let titleLabel = UILabel()
-    private let messageLabel = UILabel()
+    private let messageView = ElaraMathTextView()
     private let introLabel = UILabel()
     private let focusLabel = UILabel()
-    private let feedbackLabel = UILabel()
+    private let feedbackView = ElaraMathTextView()
     private let practiceTitleLabel = UILabel()
-    private let practiceProblemLabel = UILabel()
+    private let practiceProblemView = ElaraMathTextView()
     private let practiceMetaLabel = UILabel()
-    private let practiceHintsLabel = UILabel()
+    private let practiceHintsView = ElaraMathTextView()
     private let actionLabel = UILabel()
     private let practiceButton = UIButton(type: .system)
     private let primaryButton = UIButton(type: .system)
@@ -467,22 +468,23 @@ private final class ElaraCoachDrawerView: UIView {
     }
 
     func configure(with model: ElaraCoachCardModel) {
+        print("[Elara LaTeX] Drawer configure status=\(model.status ?? "<none>") title=\(model.title)")
         self.titleLabel.text = model.title
-        self.messageLabel.text = model.message
+        self.messageView.setContent(model.message)
         self.introLabel.isHidden = true
         self.focusLabel.text = model.focusLineText
         self.focusLabel.isHidden = (model.focusLineText == nil)
         if model.feedback.isEmpty {
-            self.feedbackLabel.text = nil
-            self.feedbackLabel.isHidden = true
+            self.feedbackView.setContent(nil)
+            self.feedbackView.isHidden = true
         } else {
             let feedbackPreview = model.feedback.prefix(3).map { "• \($0)" }.joined(separator: "\n")
-            self.feedbackLabel.text = feedbackPreview
-            self.feedbackLabel.isHidden = false
+            self.feedbackView.setContent(feedbackPreview)
+            self.feedbackView.isHidden = false
         }
         if let practiceProblem = model.practiceProblem {
             self.practiceTitleLabel.text = "Practice Problem"
-            self.practiceProblemLabel.text = practiceProblem.problemText
+            self.practiceProblemView.setContent(practiceProblem.problemText)
             var metaItems: [String] = []
             if let topic = practiceProblem.topic, topic.isEmpty == false {
                 metaItems.append(topic)
@@ -494,20 +496,20 @@ private final class ElaraCoachDrawerView: UIView {
             let hintLines = practiceProblem.hints.enumerated().map { index, hint in
                 return "Hint \(index + 1): \(hint)"
             }.joined(separator: "\n")
-            self.practiceHintsLabel.text = hintLines.isEmpty ? nil : hintLines
+            self.practiceHintsView.setContent(hintLines.isEmpty ? nil : hintLines)
             self.practiceTitleLabel.isHidden = false
-            self.practiceProblemLabel.isHidden = false
+            self.practiceProblemView.isHidden = false
             self.practiceMetaLabel.isHidden = (self.practiceMetaLabel.text == nil)
-            self.practiceHintsLabel.isHidden = (self.practiceHintsLabel.text == nil)
+            self.practiceHintsView.isHidden = hintLines.isEmpty
         } else {
             self.practiceTitleLabel.text = nil
-            self.practiceProblemLabel.text = nil
+            self.practiceProblemView.setContent(nil)
             self.practiceMetaLabel.text = nil
-            self.practiceHintsLabel.text = nil
+            self.practiceHintsView.setContent(nil)
             self.practiceTitleLabel.isHidden = true
-            self.practiceProblemLabel.isHidden = true
+            self.practiceProblemView.isHidden = true
             self.practiceMetaLabel.isHidden = true
-            self.practiceHintsLabel.isHidden = true
+            self.practiceHintsView.isHidden = true
         }
         if model.showRecheckPrompt {
             self.actionLabel.text = "You made changes to your work, want to check again?"
@@ -560,21 +562,21 @@ private final class ElaraCoachDrawerView: UIView {
 
     func showIntroState() {
         self.titleLabel.text = "Elara Coach"
-        self.messageLabel.text = "Analyze your page to get step-by-step feedback, targeted revisions, and live guidance."
+        self.messageView.setContent("Analyze your page to get step-by-step feedback, targeted revisions, and live guidance.")
         self.introLabel.text = "Use this panel as the main place to start a check, review feedback, and continue the next revision."
         self.introLabel.isHidden = false
         self.focusLabel.text = nil
         self.focusLabel.isHidden = true
-        self.feedbackLabel.text = nil
-        self.feedbackLabel.isHidden = true
+        self.feedbackView.setContent(nil)
+        self.feedbackView.isHidden = true
         self.practiceTitleLabel.text = nil
         self.practiceTitleLabel.isHidden = true
-        self.practiceProblemLabel.text = nil
-        self.practiceProblemLabel.isHidden = true
+        self.practiceProblemView.setContent(nil)
+        self.practiceProblemView.isHidden = true
         self.practiceMetaLabel.text = nil
         self.practiceMetaLabel.isHidden = true
-        self.practiceHintsLabel.text = nil
-        self.practiceHintsLabel.isHidden = true
+        self.practiceHintsView.setContent(nil)
+        self.practiceHintsView.isHidden = true
         self.actionLabel.text = "Ready when you are."
         self.actionLabel.isHidden = false
         self.practiceButton.isHidden = true
@@ -645,10 +647,8 @@ private final class ElaraCoachDrawerView: UIView {
         self.titleLabel.numberOfLines = 2
         self.titleLabel.textAlignment = .left
 
-        self.messageLabel.font = .systemFont(ofSize: 14, weight: .regular)
-        self.messageLabel.textColor = .label
-        self.messageLabel.numberOfLines = 0
-        self.messageLabel.textAlignment = .left
+        self.messageView.defaultTextFont = .systemFont(ofSize: 14, weight: .regular)
+        self.messageView.defaultTextColor = .label
 
         self.introLabel.font = .systemFont(ofSize: 13, weight: .regular)
         self.introLabel.textColor = .secondaryLabel
@@ -660,10 +660,8 @@ private final class ElaraCoachDrawerView: UIView {
         self.focusLabel.numberOfLines = 0
         self.focusLabel.textAlignment = .left
 
-        self.feedbackLabel.font = .systemFont(ofSize: 13, weight: .regular)
-        self.feedbackLabel.textColor = .secondaryLabel
-        self.feedbackLabel.numberOfLines = 0
-        self.feedbackLabel.textAlignment = .left
+        self.feedbackView.defaultTextFont = .systemFont(ofSize: 13, weight: .regular)
+        self.feedbackView.defaultTextColor = .secondaryLabel
 
         self.practiceTitleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         self.practiceTitleLabel.textColor = .label
@@ -671,11 +669,9 @@ private final class ElaraCoachDrawerView: UIView {
         self.practiceTitleLabel.textAlignment = .left
         self.practiceTitleLabel.isHidden = true
 
-        self.practiceProblemLabel.font = .systemFont(ofSize: 14, weight: .regular)
-        self.practiceProblemLabel.textColor = .label
-        self.practiceProblemLabel.numberOfLines = 0
-        self.practiceProblemLabel.textAlignment = .left
-        self.practiceProblemLabel.isHidden = true
+        self.practiceProblemView.defaultTextFont = .systemFont(ofSize: 14, weight: .regular)
+        self.practiceProblemView.defaultTextColor = .label
+        self.practiceProblemView.isHidden = true
 
         self.practiceMetaLabel.font = .systemFont(ofSize: 12, weight: .medium)
         self.practiceMetaLabel.textColor = .secondaryLabel
@@ -683,11 +679,9 @@ private final class ElaraCoachDrawerView: UIView {
         self.practiceMetaLabel.textAlignment = .left
         self.practiceMetaLabel.isHidden = true
 
-        self.practiceHintsLabel.font = .systemFont(ofSize: 13, weight: .regular)
-        self.practiceHintsLabel.textColor = .secondaryLabel
-        self.practiceHintsLabel.numberOfLines = 0
-        self.practiceHintsLabel.textAlignment = .left
-        self.practiceHintsLabel.isHidden = true
+        self.practiceHintsView.defaultTextFont = .systemFont(ofSize: 13, weight: .regular)
+        self.practiceHintsView.defaultTextColor = .secondaryLabel
+        self.practiceHintsView.isHidden = true
 
         self.actionLabel.font = .systemFont(ofSize: 13, weight: .medium)
         self.actionLabel.textColor = .label
@@ -744,16 +738,16 @@ private final class ElaraCoachDrawerView: UIView {
         self.contentStack.translatesAutoresizingMaskIntoConstraints = false
         self.contentStack.addArrangedSubview(headerStack)
         self.contentStack.addArrangedSubview(self.titleLabel)
-        self.contentStack.addArrangedSubview(self.messageLabel)
+        self.contentStack.addArrangedSubview(self.messageView)
         self.contentStack.addArrangedSubview(self.introLabel)
         self.contentStack.addArrangedSubview(self.focusLabel)
-        self.contentStack.addArrangedSubview(self.feedbackLabel)
+        self.contentStack.addArrangedSubview(self.feedbackView)
         self.contentStack.addArrangedSubview(self.practiceTitleLabel)
-        self.contentStack.addArrangedSubview(self.practiceProblemLabel)
+        self.contentStack.addArrangedSubview(self.practiceProblemView)
         self.contentStack.addArrangedSubview(self.practiceMetaLabel)
-        self.contentStack.addArrangedSubview(self.practiceHintsLabel)
-        self.contentStack.setCustomSpacing(14, after: self.messageLabel)
-        self.contentStack.setCustomSpacing(14, after: self.feedbackLabel)
+        self.contentStack.addArrangedSubview(self.practiceHintsView)
+        self.contentStack.setCustomSpacing(14, after: self.messageView)
+        self.contentStack.setCustomSpacing(14, after: self.feedbackView)
 
         self.footerStack.axis = .vertical
         self.footerStack.alignment = .fill
@@ -839,6 +833,343 @@ private final class ElaraCoachDrawerView: UIView {
         default:
             return (UIColor.systemGray4, UIColor.label)
         }
+    }
+}
+
+private final class ElaraMathTextView: UIView {
+
+    var defaultTextFont: UIFont = .systemFont(ofSize: 14, weight: .regular) {
+        didSet { self.reloadIfNeeded() }
+    }
+    var defaultTextColor: UIColor = .label {
+        didSet { self.reloadIfNeeded() }
+    }
+
+    private let webView: WKWebView
+    private var contentHeightConstraint: NSLayoutConstraint!
+    private var currentText: String?
+
+    override init(frame: CGRect) {
+        let configuration = WKWebViewConfiguration()
+        configuration.defaultWebpagePreferences.preferredContentMode = .mobile
+        let userContentController = WKUserContentController()
+        configuration.userContentController = userContentController
+        self.webView = WKWebView(frame: .zero, configuration: configuration)
+        super.init(frame: frame)
+        userContentController.add(WeakScriptMessageHandler(delegate: self), name: "elaraContentHeight")
+        self.buildUI()
+    }
+
+    required init?(coder: NSCoder) {
+        let configuration = WKWebViewConfiguration()
+        configuration.defaultWebpagePreferences.preferredContentMode = .mobile
+        let userContentController = WKUserContentController()
+        configuration.userContentController = userContentController
+        self.webView = WKWebView(frame: .zero, configuration: configuration)
+        super.init(coder: coder)
+        userContentController.add(WeakScriptMessageHandler(delegate: self), name: "elaraContentHeight")
+        self.buildUI()
+    }
+
+    deinit {
+        self.webView.configuration.userContentController.removeScriptMessageHandler(forName: "elaraContentHeight")
+    }
+
+    func setContent(_ text: String?) {
+        self.currentText = text
+        let preview = text?.prefix(140) ?? "<nil>"
+        print("[Elara DrawerWeb] setContent preview=\(preview)")
+
+        guard let text, text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+            self.contentHeightConstraint.constant = 1
+            self.webView.loadHTMLString("<html><body style='margin:0;padding:0;background:transparent;'></body></html>", baseURL: nil)
+            return
+        }
+
+        let normalized = self.normalizeLatexEscapes(in: text)
+        let html = self.buildHTML(from: normalized)
+        self.webView.loadHTMLString(html, baseURL: nil)
+    }
+
+    private func buildUI() {
+        self.translatesAutoresizingMaskIntoConstraints = false
+        self.webView.translatesAutoresizingMaskIntoConstraints = false
+        self.webView.isOpaque = false
+        self.webView.backgroundColor = .clear
+        self.webView.scrollView.backgroundColor = .clear
+        self.webView.scrollView.isScrollEnabled = false
+        self.webView.navigationDelegate = self
+        self.addSubview(self.webView)
+
+        self.contentHeightConstraint = self.webView.heightAnchor.constraint(equalToConstant: 1)
+        self.contentHeightConstraint.priority = .required
+        NSLayoutConstraint.activate([
+            self.webView.topAnchor.constraint(equalTo: self.topAnchor),
+            self.webView.leadingAnchor.constraint(equalTo: self.leadingAnchor),
+            self.webView.trailingAnchor.constraint(equalTo: self.trailingAnchor),
+            self.webView.bottomAnchor.constraint(equalTo: self.bottomAnchor),
+            self.contentHeightConstraint
+        ])
+    }
+
+    private func reloadIfNeeded() {
+        if let currentText {
+            self.setContent(currentText)
+        }
+    }
+
+    private func buildHTML(from text: String) -> String {
+        let contentHTML = self.formattedContentHTML(from: text)
+        let fontSize = max(12, self.defaultTextFont.pointSize)
+        let textHex = self.defaultTextColor.hexString
+        return """
+        <!doctype html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+          <style>
+            :root {
+              --fg: \(textHex);
+              --muted: #5f6368;
+              --card: rgba(11, 87, 208, 0.06);
+              --line: rgba(0, 0, 0, 0.08);
+            }
+            body {
+              margin: 0;
+              padding: 0;
+              color: var(--fg);
+              background: transparent;
+              font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+              font-size: \(fontSize)px;
+              line-height: 1.45;
+            }
+            .root {
+              display: flex;
+              flex-direction: column;
+              gap: 10px;
+            }
+            .section {
+              margin: 0;
+              padding: 0;
+            }
+            .lead {
+              background: var(--card);
+              border: 1px solid var(--line);
+              border-radius: 12px;
+              padding: 10px 12px;
+            }
+            p {
+              margin: 0;
+              white-space: pre-wrap;
+            }
+            p + p {
+              margin-top: 6px;
+            }
+            ul {
+              margin: 0;
+              padding-left: 18px;
+            }
+            li + li {
+              margin-top: 4px;
+            }
+            .label {
+              font-weight: 600;
+            }
+          </style>
+          <script>
+            window.MathJax = {
+              tex: {
+                inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],
+                displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']],
+                processEscapes: true
+              },
+              options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+              },
+              startup: {
+                ready: () => {
+                  MathJax.startup.defaultReady();
+                  reportHeight();
+                  setTimeout(reportHeight, 120);
+                }
+              }
+            };
+            function reportHeight() {
+              const h = Math.max(
+                document.documentElement.scrollHeight || 0,
+                document.body.scrollHeight || 0
+              );
+              if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.elaraContentHeight) {
+                window.webkit.messageHandlers.elaraContentHeight.postMessage(Math.ceil(h));
+              }
+            }
+            window.addEventListener('load', () => {
+              reportHeight();
+              setTimeout(reportHeight, 40);
+            });
+          </script>
+          <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+        </head>
+        <body>
+          <div class="root">\(contentHTML)</div>
+        </body>
+        </html>
+        """
+    }
+
+    private func formattedContentHTML(from text: String) -> String {
+        let blocks = self.splitBlocks(from: text)
+        var sections: [String] = []
+        for (index, block) in blocks.enumerated() {
+            let allHints = block.allSatisfy { self.isHintLine($0) }
+            if allHints {
+                let hints = block.map { line in
+                    "<li>\(self.escapeHTML(self.stripHintPrefix(from: line)))</li>"
+                }.joined()
+                sections.append("<section class=\"section\"><ul>\(hints)</ul></section>")
+                continue
+            }
+
+            let linesHTML = block.map { line in
+                self.formattedLineHTML(from: line)
+            }.joined()
+            let sectionClass = index == 0 ? "section lead" : "section"
+            sections.append("<section class=\"\(sectionClass)\">\(linesHTML)</section>")
+        }
+        return sections.joined()
+    }
+
+    private func splitBlocks(from text: String) -> [[String]] {
+        var result: [[String]] = []
+        var current: [String] = []
+        let lines = text.components(separatedBy: .newlines)
+        for rawLine in lines {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line.isEmpty {
+                if current.isEmpty == false {
+                    result.append(current)
+                    current = []
+                }
+                continue
+            }
+            current.append(line)
+        }
+        if current.isEmpty == false {
+            result.append(current)
+        }
+        if result.isEmpty {
+            return [[text.trimmingCharacters(in: .whitespacesAndNewlines)]]
+        }
+        return result
+    }
+
+    private func formattedLineHTML(from line: String) -> String {
+        if line.hasPrefix("• ") || line.hasPrefix("- ") {
+            let body = String(line.dropFirst(2))
+            return "<ul><li>\(self.escapeHTML(body))</li></ul>"
+        }
+        if let colonIndex = line.firstIndex(of: ":"), line.distance(from: line.startIndex, to: colonIndex) <= 24 {
+            let prefix = String(line[..<line.index(after: colonIndex)])
+            let suffix = String(line[line.index(after: colonIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if suffix.isEmpty == false {
+                return "<p><span class=\"label\">\(self.escapeHTML(prefix))</span> \(self.escapeHTML(suffix))</p>"
+            }
+        }
+        return "<p>\(self.escapeHTML(line))</p>"
+    }
+
+    private func isHintLine(_ line: String) -> Bool {
+        let lowered = line.lowercased()
+        return lowered.hasPrefix("hint ")
+    }
+
+    private func stripHintPrefix(from line: String) -> String {
+        if let colonIndex = line.firstIndex(of: ":") {
+            return String(line[line.index(after: colonIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return line
+    }
+
+    private func normalizeLatexEscapes(in text: String) -> String {
+        return text.replacingOccurrences(of: "\\\\", with: "\\")
+    }
+
+    private func escapeHTML(_ value: String) -> String {
+        var escaped = value
+        escaped = escaped.replacingOccurrences(of: "&", with: "&amp;")
+        escaped = escaped.replacingOccurrences(of: "<", with: "&lt;")
+        escaped = escaped.replacingOccurrences(of: ">", with: "&gt;")
+        escaped = escaped.replacingOccurrences(of: "\"", with: "&quot;")
+        escaped = escaped.replacingOccurrences(of: "'", with: "&#39;")
+        return escaped
+    }
+
+    private func updateContentHeight(_ rawValue: Any?) {
+        let height: CGFloat
+        if let value = rawValue as? CGFloat {
+            height = value
+        } else if let value = rawValue as? Double {
+            height = CGFloat(value)
+        } else if let value = rawValue as? NSNumber {
+            height = CGFloat(value.doubleValue)
+        } else {
+            return
+        }
+        let clamped = max(1, min(height, 2000))
+        if abs(self.contentHeightConstraint.constant - clamped) < 0.5 {
+            return
+        }
+        self.contentHeightConstraint.constant = clamped
+        self.invalidateIntrinsicContentSize()
+        self.superview?.setNeedsLayout()
+    }
+}
+
+extension ElaraMathTextView: WKNavigationDelegate {
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        webView.evaluateJavaScript("Math.max(document.documentElement.scrollHeight || 0, document.body.scrollHeight || 0);") { [weak self] value, _ in
+            self?.updateContentHeight(value)
+        }
+    }
+}
+
+extension ElaraMathTextView: WKScriptMessageHandler {
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard message.name == "elaraContentHeight" else {
+            return
+        }
+        self.updateContentHeight(message.body)
+    }
+}
+
+private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
+    weak var delegate: WKScriptMessageHandler?
+
+    init(delegate: WKScriptMessageHandler) {
+        self.delegate = delegate
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        self.delegate?.userContentController(userContentController, didReceive: message)
+    }
+}
+
+private extension UIColor {
+    var hexString: String {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        guard self.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+            return "#111111"
+        }
+        let r = Int(round(red * 255))
+        let g = Int(round(green * 255))
+        let b = Int(round(blue * 255))
+        return String(format: "#%02X%02X%02X", r, g, b)
     }
 }
 
