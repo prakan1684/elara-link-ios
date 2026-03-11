@@ -12,6 +12,7 @@ protocol MainViewControllerDisplayLogic: AnyObject {
     func displayOpenDocumentOptions()
     func displayNewDocumentOptions(cancelEnabled: Bool)
     func displayImagePicker()
+    func displayNotebookHome()
 }
 
 /// This is the Main ViewController of the project.
@@ -58,6 +59,9 @@ class MainViewController: UIViewController, Storyboarded {
     private var elaraCoachDrawerHeightConstraint: NSLayoutConstraint?
     private var isElaraCoachDrawerExpanded: Bool = false
     private var elaraViewportDisplayLink: CADisplayLink?
+    private let launchChoiceView = ElaraLaunchChoiceView()
+    private var didShowLaunchChoice: Bool = false
+    private var toolbarInjected: Bool = false
 
     // MARK: Life Cycle
 
@@ -77,8 +81,11 @@ class MainViewController: UIViewController, Storyboarded {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        let fileFound = self.viewModel?.openLastModifiedFileIfAny() ?? false
-        self.coordinator?.displayToolBar(editingEnabled: fileFound)
+        if self.toolbarInjected == false {
+            self.coordinator?.displayToolBar(editingEnabled: false)
+            self.toolbarInjected = true
+        }
+        self.presentLaunchChoiceIfNeeded()
         self.startElaraViewportTrackingIfNeeded()
     }
 
@@ -249,6 +256,54 @@ class MainViewController: UIViewController, Storyboarded {
         self.setElaraCoachDrawerExpanded(false, animated: false)
     }
 
+    private func presentLaunchChoiceIfNeeded(force: Bool = false) {
+        if force == false {
+            guard self.didShowLaunchChoice == false else {
+                return
+            }
+        }
+        guard self.launchChoiceView.superview == nil else {
+            return
+        }
+        self.didShowLaunchChoice = true
+        self.launchChoiceView.translatesAutoresizingMaskIntoConstraints = false
+        self.launchChoiceView.configure(hasRecentNotebook: self.viewModel?.hasSavedNotebook() ?? false)
+        self.launchChoiceView.onContinue = { [weak self] in
+            guard let self = self else { return }
+            self.launchChoiceView.dismissAnimated {
+                self.viewModel?.continueWithLastNotebook()
+            }
+        }
+        self.launchChoiceView.onNewBlank = { [weak self] in
+            guard let self = self else { return }
+            self.launchChoiceView.dismissAnimated {
+                self.viewModel?.startNewBlankNotebook()
+            }
+        }
+        self.launchChoiceView.onOpenNotebook = { [weak self] in
+            guard let self = self else { return }
+            self.launchChoiceView.dismissAnimated {
+                self.viewModel?.openNotebookPicker()
+            }
+        }
+        self.view.addSubview(self.launchChoiceView)
+        NSLayoutConstraint.activate([
+            self.launchChoiceView.topAnchor.constraint(equalTo: self.view.topAnchor),
+            self.launchChoiceView.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
+            self.launchChoiceView.trailingAnchor.constraint(equalTo: self.view.trailingAnchor),
+            self.launchChoiceView.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)
+        ])
+        self.launchChoiceView.presentAnimated()
+    }
+
+    func didDismissModal() {
+        // If the modal closes while no part is loaded (e.g. open list canceled from launch),
+        // show the notebook launcher again so users are never stuck on a blank disabled canvas.
+        if self.viewModel?.editor?.part == nil {
+            self.displayNotebookHome()
+        }
+    }
+
     private func updateElaraCoachDrawer(with model: ElaraCoachCardModel?) {
         guard let model = model else {
             self.elaraCoachDrawerView.showIntroState()
@@ -366,6 +421,11 @@ extension MainViewController: MainViewControllerDisplayLogic {
     func displayImagePicker() {
         self.coordinator?.presentImagePicker(delegate: self)
     }
+
+    func displayNotebookHome() {
+        self.didShowLaunchChoice = false
+        self.presentLaunchChoiceIfNeeded(force: true)
+    }
 }
 
 extension MainViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
@@ -468,7 +528,6 @@ private final class ElaraCoachDrawerView: UIView {
     }
 
     func configure(with model: ElaraCoachCardModel) {
-        print("[Elara LaTeX] Drawer configure status=\(model.status ?? "<none>") title=\(model.title)")
         self.titleLabel.text = model.title
         self.messageView.setContent(model.message)
         self.introLabel.isHidden = true
@@ -876,10 +935,10 @@ private final class ElaraMathTextView: UIView {
     }
 
     func setContent(_ text: String?) {
+        if self.currentText == text {
+            return
+        }
         self.currentText = text
-        let preview = text?.prefix(140) ?? "<nil>"
-        print("[Elara DrawerWeb] setContent preview=\(preview)")
-
         guard let text, text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
             self.contentHeightConstraint.constant = 1
             self.webView.loadHTMLString("<html><body style='margin:0;padding:0;background:transparent;'></body></html>", baseURL: nil)
@@ -1170,6 +1229,174 @@ private extension UIColor {
         let g = Int(round(green * 255))
         let b = Int(round(blue * 255))
         return String(format: "#%02X%02X%02X", r, g, b)
+    }
+}
+
+private final class ElaraLaunchChoiceView: UIView {
+
+    var onContinue: (() -> Void)?
+    var onNewBlank: (() -> Void)?
+    var onOpenNotebook: (() -> Void)?
+
+    private let backgroundGradient = CAGradientLayer()
+    private let dimmerView = UIView()
+    private let cardView = UIView()
+    private let titleLabel = UILabel()
+    private let subtitleLabel = UILabel()
+    private let buttonStack = UIStackView()
+    private let continueButton = UIButton(type: .system)
+    private let newButton = UIButton(type: .system)
+    private let openButton = UIButton(type: .system)
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        self.buildUI()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        self.buildUI()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        self.backgroundGradient.frame = self.bounds
+    }
+
+    func configure(hasRecentNotebook: Bool) {
+        self.continueButton.isEnabled = hasRecentNotebook
+        self.continueButton.alpha = hasRecentNotebook ? 1.0 : 0.45
+    }
+
+    func presentAnimated() {
+        self.alpha = 0
+        self.cardView.transform = CGAffineTransform(scaleX: 0.96, y: 0.96).translatedBy(x: 0, y: 10)
+        UIView.animate(withDuration: 0.22, delay: 0, options: [.curveEaseOut], animations: {
+            self.alpha = 1
+            self.cardView.transform = .identity
+        }, completion: nil)
+    }
+
+    func dismissAnimated(completion: @escaping () -> Void) {
+        UIView.animate(withDuration: 0.18, delay: 0, options: [.curveEaseIn], animations: {
+            self.alpha = 0
+            self.cardView.transform = CGAffineTransform(scaleX: 0.98, y: 0.98).translatedBy(x: 0, y: 6)
+        }, completion: { _ in
+            self.removeFromSuperview()
+            completion()
+        })
+    }
+
+    private func buildUI() {
+        self.translatesAutoresizingMaskIntoConstraints = false
+        self.backgroundColor = .clear
+        self.backgroundGradient.colors = [
+            UIColor(red: 0.93, green: 0.96, blue: 1.00, alpha: 1.0).cgColor,
+            UIColor(red: 0.97, green: 0.94, blue: 1.00, alpha: 1.0).cgColor
+        ]
+        self.backgroundGradient.startPoint = CGPoint(x: 0, y: 0)
+        self.backgroundGradient.endPoint = CGPoint(x: 1, y: 1)
+        self.layer.addSublayer(self.backgroundGradient)
+
+        self.dimmerView.translatesAutoresizingMaskIntoConstraints = false
+        self.dimmerView.backgroundColor = UIColor.black.withAlphaComponent(0.08)
+        self.addSubview(self.dimmerView)
+
+        self.cardView.translatesAutoresizingMaskIntoConstraints = false
+        self.cardView.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.95)
+        self.cardView.layer.cornerRadius = 20
+        self.cardView.layer.cornerCurve = .continuous
+        self.cardView.layer.borderWidth = 1
+        self.cardView.layer.borderColor = UIColor.separator.withAlphaComponent(0.35).cgColor
+        self.cardView.layer.shadowColor = UIColor.black.cgColor
+        self.cardView.layer.shadowOpacity = 0.08
+        self.cardView.layer.shadowRadius = 14
+        self.cardView.layer.shadowOffset = CGSize(width: 0, height: 8)
+        self.addSubview(self.cardView)
+
+        self.titleLabel.font = .systemFont(ofSize: 26, weight: .bold)
+        self.titleLabel.textColor = .label
+        self.titleLabel.text = "Welcome to Elara"
+        self.titleLabel.numberOfLines = 2
+
+        self.subtitleLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        self.subtitleLabel.textColor = .secondaryLabel
+        self.subtitleLabel.text = "Pick how you want to start this session."
+        self.subtitleLabel.numberOfLines = 0
+
+        self.buttonStack.axis = .vertical
+        self.buttonStack.spacing = 12
+        self.buttonStack.alignment = .fill
+        self.buttonStack.distribution = .fill
+
+        self.continueButton.setTitle("Continue Last Notebook", for: .normal)
+        self.newButton.setTitle("New Blank Notebook", for: .normal)
+        self.openButton.setTitle("Open Notebook", for: .normal)
+
+        self.styleActionButton(self.continueButton, tint: UIColor.systemTeal)
+        self.styleActionButton(self.newButton, tint: UIColor.systemBlue)
+        self.styleActionButton(self.openButton, tint: UIColor.systemIndigo)
+
+        self.continueButton.addTarget(self, action: #selector(didTapContinue), for: .touchUpInside)
+        self.newButton.addTarget(self, action: #selector(didTapNew), for: .touchUpInside)
+        self.openButton.addTarget(self, action: #selector(didTapOpen), for: .touchUpInside)
+
+        self.buttonStack.addArrangedSubview(self.continueButton)
+        self.buttonStack.addArrangedSubview(self.newButton)
+        self.buttonStack.addArrangedSubview(self.openButton)
+
+        let contentStack = UIStackView(arrangedSubviews: [self.titleLabel, self.subtitleLabel, self.buttonStack])
+        contentStack.axis = .vertical
+        contentStack.spacing = 14
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+        self.cardView.addSubview(contentStack)
+
+        let preferredWidth = self.cardView.widthAnchor.constraint(equalToConstant: 420)
+        preferredWidth.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            self.dimmerView.topAnchor.constraint(equalTo: self.topAnchor),
+            self.dimmerView.leadingAnchor.constraint(equalTo: self.leadingAnchor),
+            self.dimmerView.trailingAnchor.constraint(equalTo: self.trailingAnchor),
+            self.dimmerView.bottomAnchor.constraint(equalTo: self.bottomAnchor),
+
+            self.cardView.centerXAnchor.constraint(equalTo: self.centerXAnchor),
+            self.cardView.centerYAnchor.constraint(equalTo: self.centerYAnchor),
+            self.cardView.leadingAnchor.constraint(greaterThanOrEqualTo: self.leadingAnchor, constant: 24),
+            self.cardView.trailingAnchor.constraint(lessThanOrEqualTo: self.trailingAnchor, constant: -24),
+            preferredWidth,
+
+            contentStack.topAnchor.constraint(equalTo: self.cardView.topAnchor, constant: 22),
+            contentStack.leadingAnchor.constraint(equalTo: self.cardView.leadingAnchor, constant: 20),
+            contentStack.trailingAnchor.constraint(equalTo: self.cardView.trailingAnchor, constant: -20),
+            contentStack.bottomAnchor.constraint(equalTo: self.cardView.bottomAnchor, constant: -20),
+
+            self.continueButton.heightAnchor.constraint(equalToConstant: 46),
+            self.newButton.heightAnchor.constraint(equalToConstant: 46),
+            self.openButton.heightAnchor.constraint(equalToConstant: 46)
+        ])
+    }
+
+    private func styleActionButton(_ button: UIButton, tint: UIColor) {
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.backgroundColor = tint.withAlphaComponent(0.14)
+        button.setTitleColor(tint, for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        button.layer.cornerRadius = 12
+        button.layer.cornerCurve = .continuous
+        button.layer.borderWidth = 1
+        button.layer.borderColor = tint.withAlphaComponent(0.35).cgColor
+    }
+
+    @objc private func didTapContinue() {
+        self.onContinue?()
+    }
+
+    @objc private func didTapNew() {
+        self.onNewBlank?()
+    }
+
+    @objc private func didTapOpen() {
+        self.onOpenNotebook?()
     }
 }
 

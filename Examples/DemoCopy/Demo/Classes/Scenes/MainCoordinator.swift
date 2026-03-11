@@ -29,7 +29,9 @@ final class MainCoordinator {
 
     func dissmissModal() {
         self.enableEditing(enable: true)
-        self.navigationController.dismiss(animated: true, completion: nil)
+        self.navigationController.dismiss(animated: true) { [weak self] in
+            self?.mainViewController?.didDismissModal()
+        }
     }
 
     // MARK: - Editor

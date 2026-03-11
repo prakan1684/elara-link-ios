@@ -87,6 +87,32 @@ class MainViewModel: NSObject {
         return true
     }
 
+    func hasSavedNotebook() -> Bool {
+        return FilesProvider.retrieveLastModifiedFile() != nil
+    }
+
+    func continueWithLastNotebook() {
+        guard let lastOpenedFile = FilesProvider.retrieveLastModifiedFile() else {
+            self.startNewBlankNotebook()
+            return
+        }
+        self.openFile(file: lastOpenedFile, engineProvider: self.engineProvider)
+    }
+
+    func startNewBlankNotebook() {
+        if self.createDefaultElaraPage(onNewPackage: true) == false {
+            self.delegate?.displayNewDocumentOptions(cancelEnabled: false)
+        }
+    }
+
+    func openNotebookPicker() {
+        self.delegate?.displayOpenDocumentOptions()
+    }
+
+    func showNotebookHome() {
+        self.delegate?.displayNotebookHome()
+    }
+
     @discardableResult
     func createDefaultElaraPage(onNewPackage: Bool) -> Bool {
         guard let supportedPartTypes = self.engineProvider.engine?.supportedPartTypes,
@@ -132,6 +158,10 @@ class MainViewModel: NSObject {
 
     private func handleToolingError(error: Error) {
         guard let toolingError = error as? ToolingWorker.ToolingError else {
+            return
+        }
+        // During startup no part may be loaded yet (launch chooser). Ignore this transient state.
+        if toolingError == .noPartType {
             return
         }
         self.errorAlertModel = AlertModelHelper.createAlertModel(with: toolingError)
@@ -212,6 +242,10 @@ class MainViewModel: NSObject {
 
     func moreActions(barButtonIdem: UIBarButtonItem) {
         var actions: [ActionModel] = []
+        let notebookHomeAction = ActionModel(actionText: "Notebook Home") { [weak self] action in
+            self?.showNotebookHome()
+        }
+        actions.append(notebookHomeAction)
         let analyzeAction = ActionModel(actionText: "Analyze with Elara") { [weak self] action in
             self?.analyzeWithElara()
         }

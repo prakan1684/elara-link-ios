@@ -21,16 +21,16 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>4.3</string>
+	<string>0.1</string>
 	<key>CFBundleVersion</key>
-	<string>4.3.0</string>
+	<string>0.1.0</string>
 	<key>ELARA_ANALYZE_URL</key>
-	<string>https://7dc0-2607-fb91-2751-c2dc-5150-739-1467-3f35.ngrok-free.app/check/ios</string>
+	<string>https://elara-backend.graydune-185d095c.eastus.azurecontainerapps.io/check/ios</string>
 	<key>ELARA_LOG_FULL_PAYLOAD</key>
 	<false/>
-	<key>ELARA_LOG_VERBOSE_RECOGNITION</key>
-	<false/>
 	<key>ELARA_LOG_LATEX_RENDER</key>
+	<false/>
+	<key>ELARA_LOG_VERBOSE_RECOGNITION</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
